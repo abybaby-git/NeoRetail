@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdvancedLoader from './components/AdvancedLoader';
 import LogoutConfirmation from './components/LogoutConfirmation';
+import Toast from './components/Toast';
 import logo from './assets/images/icon.png';
 
 const AdminStore = () => {
@@ -22,12 +23,38 @@ const AdminStore = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
   const [newStoreLocation, setNewStoreLocation] = useState('');
+  const [newStoreStatus, setNewStoreStatus] = useState('online');
   const [isSavingStore, setIsSavingStore] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const dropdownRef = useRef(null);
 
+  // Edit modal states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingStore, setEditingStore] = useState(null);
+  const [editStoreName, setEditStoreName] = useState('');
+  const [editStoreLocation, setEditStoreLocation] = useState('');
+  const [editStoreStatus, setEditStoreStatus] = useState('online');
+  const [editStoreManagerId, setEditStoreManagerId] = useState('');
+  const [isUpdatingStore, setIsUpdatingStore] = useState(false);
+  const [managers, setManagers] = useState([]);
+
+  // Toast notification states
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // Delete confirmation states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingStore, setDeletingStore] = useState(null);
+  const [isDeletingStore, setIsDeletingStore] = useState(false);
+
   // Stores from backend
   const [stores, setStores] = useState([]);
+  
+  // Statistics state
+  const [stats, setStats] = useState({
+    totalStores: 0,
+    totalManagers: 0,
+    totalStaff: 0
+  });
 
   // Function to decode JWT token
   const decodeToken = (token) => {
@@ -109,6 +136,9 @@ const AdminStore = () => {
           setStores([]);
         }
 
+        // Fetch statistics
+        await fetchStats();
+
         setUser(userFromToken);
         setIsLoading(false);
       } catch (error) {
@@ -130,6 +160,152 @@ const AdminStore = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/login');
+  };
+
+  // Show toast notification
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+  };
+
+  // Hide toast notification
+  const hideToast = () => {
+    setToast({ show: false, message: '', type: 'success' });
+  };
+
+  // Fetch statistics
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/stores/stats', {
+        headers: { Accept: 'application/json' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data.stats || { totalStores: 0, totalManagers: 0, totalStaff: 0 });
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  // Fetch managers for edit modal
+  const fetchManagers = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/stores/managers', {
+        headers: { Accept: 'application/json' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setManagers(data.managers || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch managers:', error);
+    }
+  };
+
+  // Open edit modal for a store
+  const openEditModal = async (store) => {
+    setEditingStore(store);
+    setEditStoreName(store.name || '');
+    setEditStoreLocation(store.location || '');
+    setEditStoreStatus(store.status || 'online');
+    setEditStoreManagerId(store.manager_id || '');
+    setShowEditModal(true);
+    await fetchManagers();
+  };
+
+  // Update store
+  const updateStore = async () => {
+    if (!editingStore) return;
+    
+    setIsUpdatingStore(true);
+    try {
+      const response = await fetch(`http://localhost:5000/stores/${editingStore.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: editStoreName.trim(),
+          location: editStoreLocation.trim(),
+          status: editStoreStatus,
+          manager_id: editStoreManagerId || null
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update store');
+      }
+
+      const result = await response.json();
+      
+      // Update the store in the local state
+      setStores(prevStores => 
+        prevStores.map(store => 
+          store.id === editingStore.id ? result.store : store
+        )
+      );
+
+      setShowEditModal(false);
+      setEditingStore(null);
+      setEditStoreName('');
+      setEditStoreLocation('');
+      setEditStoreStatus('online');
+      setEditStoreManagerId('');
+      
+      showToast('Store updated successfully!', 'success');
+    } catch (error) {
+      console.error('Error updating store:', error);
+      showToast('Failed to update store: ' + error.message, 'error');
+    } finally {
+      setIsUpdatingStore(false);
+    }
+  };
+
+  // Delete store
+  const deleteStore = async () => {
+    if (!deletingStore) return;
+    
+    setIsDeletingStore(true);
+    try {
+      const response = await fetch(`http://localhost:5000/stores/${deletingStore.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete store');
+      }
+
+      const result = await response.json();
+      
+      // Remove the store from the local state
+      setStores(prevStores => 
+        prevStores.filter(store => store.id !== deletingStore.id)
+      );
+
+      setShowDeleteConfirm(false);
+      setDeletingStore(null);
+      
+      // Refresh stats after deleting store
+      await fetchStats();
+      
+      showToast('Store deleted successfully!', 'success');
+    } catch (error) {
+      console.error('Error deleting store:', error);
+      showToast('Failed to delete store: ' + error.message, 'error');
+    } finally {
+      setIsDeletingStore(false);
+    }
+  };
+
+  // Open delete confirmation
+  const openDeleteConfirm = (store) => {
+    setDeletingStore(store);
+    setShowDeleteConfirm(true);
   };
 
   const cancelLogout = () => {
@@ -200,6 +376,7 @@ const AdminStore = () => {
     return matchesId && matchesName && matchesManager && matchesLocation && matchesCreated && matchesStatus && matchesSearch;
   });
 
+  // Calculate stats from stores array as fallback
   const totalStats = stores.reduce((acc) => {
     acc.totalStores++;
     return acc;
@@ -295,16 +472,47 @@ const AdminStore = () => {
         {/* Main Content */}
         <main className="p-6 pt-24">
           {/* Stats Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {/* Total Stores */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Stores</p>
-                  <p className="text-2xl font-bold text-gray-900">{totalStats.totalStores}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalStores}</p>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Managers */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Managers</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalManagers}</p>
+                </div>
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Staff */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Staff</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalStaff}</p>
+                </div>
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                 </div>
               </div>
@@ -370,13 +578,31 @@ const AdminStore = () => {
           {/* Stores Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredStores.map((store) => (
-              <div key={store.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div 
+                key={store.id} 
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => openEditModal(store)}
+              >
                 <div className="flex items-start justify-between mb-3">
                   <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">Store ID: NR/STRNM/{store.id}</span>
-                  <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(store.status)}`}>
-                    <span className="mr-1">{getStatusIcon(store.status)}</span>
-                    {(() => { const s = normalizeStatus(store.status); return s.charAt(0).toUpperCase() + s.slice(1); })()}
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(store.status)}`}>
+                      <span className="mr-1">{getStatusIcon(store.status)}</span>
+                      {(() => { const s = normalizeStatus(store.status); return s.charAt(0).toUpperCase() + s.slice(1); })()}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDeleteConfirm(store);
+                      }}
+                      className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                      title="Delete store"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900">{store.name}</h3>
                 <div className="mt-3 space-y-2 text-sm">
@@ -446,6 +672,18 @@ const AdminStore = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Status</label>
+                <select
+                  value={newStoreStatus}
+                  onChange={(e) => setNewStoreStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="online">Online</option>
+                  <option value="closed">Closed</option>
+                  <option value="maintenance">Maintenance</option>
+                </select>
+              </div>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
               <button disabled={isSavingStore} onClick={() => setShowAddModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
@@ -456,12 +694,47 @@ const AdminStore = () => {
                 onClick={async () => {
                   setIsSavingStore(true);
                   try {
-                    // Placeholder: just close and clear for now
-                    // Later: POST to backend and refresh
-                    await new Promise(r => setTimeout(r, 600));
+                    const response = await fetch('http://localhost:5000/stores', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        name: newStoreName.trim(),
+                        location: newStoreLocation.trim(),
+                        status: newStoreStatus
+                      })
+                    });
+
+                    if (!response.ok) {
+                      const errorData = await response.json();
+                      throw new Error(errorData.message || 'Failed to create store');
+                    }
+
+                    const result = await response.json();
+                    
+                    // Refresh stores list
+                    const storesResponse = await fetch('http://localhost:5000/stores', {
+                      headers: { Accept: 'application/json' }
+                    });
+                    
+                    if (storesResponse.ok) {
+                      const data = await storesResponse.json();
+                      setStores(Array.isArray(data.stores) ? data.stores : []);
+                    }
+
                     setShowAddModal(false);
                     setNewStoreName('');
                     setNewStoreLocation('');
+                    setNewStoreStatus('online');
+                    
+                    // Refresh stats after creating store
+                    await fetchStats();
+                    
+                    showToast('Store created successfully!', 'success');
+                  } catch (error) {
+                    console.error('Error creating store:', error);
+                    showToast('Failed to create store: ' + error.message, 'error');
                   } finally {
                     setIsSavingStore(false);
                   }
@@ -474,6 +747,131 @@ const AdminStore = () => {
           </div>
         </div>
       )}
+
+      {/* Edit Store Modal */}
+      {showEditModal && editingStore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !isUpdatingStore && setShowEditModal(false)} />
+          <div className="relative bg-white w-full max-w-md mx-4 rounded-xl shadow-xl border border-gray-200 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Store</h3>
+              <button disabled={isUpdatingStore} onClick={() => setShowEditModal(false)} className="text-gray-500 hover:text-gray-700">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Store Name</label>
+                <input
+                  value={editStoreName}
+                  onChange={(e) => setEditStoreName(e.target.value)}
+                  placeholder="Enter store name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Location</label>
+                <input
+                  value={editStoreLocation}
+                  onChange={(e) => setEditStoreLocation(e.target.value)}
+                  placeholder="Enter location"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Status</label>
+                <select
+                  value={editStoreStatus}
+                  onChange={(e) => setEditStoreStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="online">Online</option>
+                  <option value="closed">Closed</option>
+                  <option value="maintenance">Maintenance</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Manager</label>
+                <select
+                  value={editStoreManagerId}
+                  onChange={(e) => setEditStoreManagerId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">No Manager</option>
+                  {managers.map((manager) => (
+                    <option key={manager.id} value={manager.id}>
+                      {manager.name} ({manager.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button disabled={isUpdatingStore} onClick={() => setShowEditModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                disabled={isUpdatingStore || !editStoreName.trim() || !editStoreLocation.trim()}
+                onClick={updateStore}
+                className={`px-4 py-2 rounded-lg text-white ${isUpdatingStore || !editStoreName.trim() || !editStoreLocation.trim() ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                {isUpdatingStore ? 'Updating...' : 'Update Store'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && deletingStore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !isDeletingStore && setShowDeleteConfirm(false)} />
+          <div className="relative bg-white w-full max-w-md mx-4 rounded-xl shadow-xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Delete Store</h3>
+              <button disabled={isDeletingStore} onClick={() => setShowDeleteConfirm(false)} className="text-gray-500 hover:text-gray-700">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="mb-6">
+              <p className="text-gray-600 mb-2">
+                Are you sure you want to delete the store <strong>"{deletingStore.name}"</strong>?
+              </p>
+              <p className="text-sm text-red-600">
+                This action cannot be undone. The store and all associated data will be permanently removed.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3">
+              <button 
+                disabled={isDeletingStore} 
+                onClick={() => setShowDeleteConfirm(false)} 
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isDeletingStore}
+                onClick={deleteStore}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed"
+              >
+                {isDeletingStore ? 'Deleting...' : 'Delete Store'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.show}
+        onClose={hideToast}
+      />
 
       {/* Logout Confirmation Modal */}
       <LogoutConfirmation
