@@ -45,7 +45,7 @@ const AdminStore = () => {
       return null;
     }
   };
-
+// new comment added
   // Check authentication on component mount
   useEffect(() => {
     const checkAuth = async () => {
