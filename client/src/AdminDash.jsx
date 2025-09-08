@@ -101,6 +101,51 @@ const AdminDash = () => {
     checkAuth();
   }, [navigate]);
 
+  // Auto-logout on token expiry or inactivity
+  useEffect(() => {
+    if (!user) return;
+
+    let expiryTimerId = null;
+    let idleTimerId = null;
+    const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+    const scheduleExpiryLogout = () => {
+      const token = localStorage.getItem('token');
+      const decoded = token ? decodeToken(token) : null;
+      if (decoded?.exp) {
+        const msUntilExpiry = decoded.exp * 1000 - Date.now();
+        if (msUntilExpiry <= 0) {
+          confirmLogout();
+        } else {
+          expiryTimerId = setTimeout(() => {
+            confirmLogout();
+          }, msUntilExpiry);
+        }
+      }
+    };
+
+    const resetIdleTimer = () => {
+      if (idleTimerId) clearTimeout(idleTimerId);
+      idleTimerId = setTimeout(() => {
+        confirmLogout();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const activityHandler = () => resetIdleTimer();
+
+    scheduleExpiryLogout();
+    resetIdleTimer();
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach(evt => window.addEventListener(evt, activityHandler, { passive: true }));
+
+    return () => {
+      if (expiryTimerId) clearTimeout(expiryTimerId);
+      if (idleTimerId) clearTimeout(idleTimerId);
+      events.forEach(evt => window.removeEventListener(evt, activityHandler));
+    };
+  }, [user]);
+
   const handleLogout = () => {
     setShowLogoutConfirm(true);
   };
@@ -209,7 +254,7 @@ const AdminDash = () => {
               </svg>
               Store Management
             </a>
-            <a href="#" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+            <a href="/admin/staff" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>

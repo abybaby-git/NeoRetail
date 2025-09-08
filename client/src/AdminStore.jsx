@@ -26,6 +26,7 @@ const AdminStore = () => {
   const [newStoreStatus, setNewStoreStatus] = useState('online');
   const [isSavingStore, setIsSavingStore] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
   const dropdownRef = useRef(null);
 
   // Edit modal states
@@ -48,6 +49,8 @@ const AdminStore = () => {
 
   // Stores from backend
   const [stores, setStores] = useState([]);
+  const [usersByStore, setUsersByStore] = useState({});
+  const [users, setUsers] = useState([]);
   
   // Statistics state
   const [stats, setStats] = useState({
@@ -136,6 +139,36 @@ const AdminStore = () => {
           setStores([]);
         }
 
+        // Load users to compute role coverage per store
+        try {
+          const usersRes = await fetch('http://localhost:5000/users', {
+            headers: { Accept: 'application/json' }
+          });
+          if (usersRes.ok) {
+            const uData = await usersRes.json();
+            const list = Array.isArray(uData.users) ? uData.users : [];
+            setUsers(list);
+            const mapping = list.reduce((acc, u) => {
+              const sid = u.store_id;
+              if (sid == null) return acc; // skip HQ/admin
+              if (!acc[sid]) acc[sid] = { hasManager: false, hasStaff: false, hasCashier: false };
+              const role = (u.role || '').toLowerCase();
+              if (role === 'manager') acc[sid].hasManager = true;
+              if (role === 'staff') acc[sid].hasStaff = true;
+              if (role === 'cashier') acc[sid].hasCashier = true;
+              return acc;
+            }, {});
+            setUsersByStore(mapping);
+          } else {
+            setUsersByStore({});
+            setUsers([]);
+          }
+        } catch (err) {
+          console.error('Failed to fetch users for store coverage:', err);
+          setUsersByStore({});
+          setUsers([]);
+        }
+
         // Fetch statistics
         await fetchStats();
 
@@ -151,6 +184,51 @@ const AdminStore = () => {
 
     checkAuth();
   }, [navigate]);
+
+  // Auto-logout on token expiry or inactivity
+  useEffect(() => {
+    if (!user) return;
+
+    let expiryTimerId = null;
+    let idleTimerId = null;
+    const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+    const scheduleExpiryLogout = () => {
+      const token = localStorage.getItem('token');
+      const decoded = token ? decodeToken(token) : null;
+      if (decoded?.exp) {
+        const msUntilExpiry = decoded.exp * 1000 - Date.now();
+        if (msUntilExpiry <= 0) {
+          confirmLogout();
+        } else {
+          expiryTimerId = setTimeout(() => {
+            confirmLogout();
+          }, msUntilExpiry);
+        }
+      }
+    };
+
+    const resetIdleTimer = () => {
+      if (idleTimerId) clearTimeout(idleTimerId);
+      idleTimerId = setTimeout(() => {
+        confirmLogout();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const activityHandler = () => resetIdleTimer();
+
+    scheduleExpiryLogout();
+    resetIdleTimer();
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach(evt => window.addEventListener(evt, activityHandler, { passive: true }));
+
+    return () => {
+      if (expiryTimerId) clearTimeout(expiryTimerId);
+      if (idleTimerId) clearTimeout(idleTimerId);
+      events.forEach(evt => window.removeEventListener(evt, activityHandler));
+    };
+  }, [user]);
 
   const handleLogout = () => setShowLogoutConfirm(true);
 
@@ -373,7 +451,11 @@ const AdminStore = () => {
     const term = searchTerm.toLowerCase();
     const matchesSearch = !term || name.includes(term) || location.includes(term) || managerName.includes(term) || idStr.includes(term);
 
-    return matchesId && matchesName && matchesManager && matchesLocation && matchesCreated && matchesStatus && matchesSearch;
+    const roleCoverage = usersByStore[store.id] || { hasManager: !!store.manager_name, hasStaff: false, hasCashier: false };
+    const isComplete = roleCoverage.hasManager && roleCoverage.hasStaff && roleCoverage.hasCashier;
+    const matchesIncomplete = !showIncompleteOnly || !isComplete;
+
+    return matchesId && matchesName && matchesManager && matchesLocation && matchesCreated && matchesStatus && matchesSearch && matchesIncomplete;
   });
 
   // Calculate stats from stores array as fallback
@@ -397,7 +479,7 @@ const AdminStore = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">NeoRetail</h1>
-              <p className="text-xs text-gray-500">Store Management</p>
+              <p className="text-xs text-gray-500">Super Admin Dashboard</p>
             </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-600">
@@ -457,6 +539,13 @@ const AdminStore = () => {
                     <p className="text-sm font-medium text-gray-900">{user.name}</p>
                     <p className="text-xs text-gray-500">{user.role}</p>
                   </div>
+                  <a href="#" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                    <svg className="w-4 h-4 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Profile
+                  </a>
+                  <div className="border-t border-gray-100 my-1"></div>
                   <button onClick={handleLogout} className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
                     <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -552,6 +641,13 @@ const AdminStore = () => {
                 >
                   {showAdvancedFilters ? 'Hide filters' : 'More filters'}
                 </button>
+                <button
+                  onClick={() => setShowIncompleteOnly(v => !v)}
+                  className={`px-3 py-2 border rounded-lg text-sm ${showIncompleteOnly ? 'border-red-300 text-red-700 bg-red-50' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                  title="Show stores missing manager, staff, or cashier"
+                >
+                  {showIncompleteOnly ? 'Showing Incomplete' : 'Incomplete only'}
+                </button>
                 <button onClick={() => setShowAddModal(true)} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
                   Add Store
                 </button>
@@ -613,6 +709,18 @@ const AdminStore = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Location</span>
                     <span className="font-medium text-gray-900">{store.location || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Recruitment</span>
+                    {(() => {
+                      const rc = usersByStore[store.id] || { hasManager: !!store.manager_name, hasStaff: false, hasCashier: false };
+                      const complete = rc.hasManager && rc.hasStaff && rc.hasCashier;
+                      return (
+                        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${complete ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {complete ? 'Complete' : 'Incomplete'}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Created At</span>
@@ -752,8 +860,8 @@ const AdminStore = () => {
       {showEditModal && editingStore && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => !isUpdatingStore && setShowEditModal(false)} />
-          <div className="relative bg-white w-full max-w-md mx-4 rounded-xl shadow-xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between mb-3">
+          <div className="relative bg-white w-full max-w-3xl mx-4 rounded-xl shadow-xl border border-gray-200 p-5">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Edit Store</h3>
               <button disabled={isUpdatingStore} onClick={() => setShowEditModal(false)} className="text-gray-500 hover:text-gray-700">
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -761,51 +869,107 @@ const AdminStore = () => {
                 </svg>
               </button>
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Store Name</label>
-                <input
-                  value={editStoreName}
-                  onChange={(e) => setEditStoreName(e.target.value)}
-                  placeholder="Enter store name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Left column: Editable form */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Store Name</label>
+                  <input
+                    value={editStoreName}
+                    onChange={(e) => setEditStoreName(e.target.value)}
+                    placeholder="Enter store name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Location</label>
+                  <input
+                    value={editStoreLocation}
+                    onChange={(e) => setEditStoreLocation(e.target.value)}
+                    placeholder="Enter location"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Status</label>
+                  <select
+                    value={editStoreStatus}
+                    onChange={(e) => setEditStoreStatus(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="online">Online</option>
+                    <option value="closed">Closed</option>
+                    <option value="maintenance">Maintenance</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Manager</label>
+                  <select
+                    value={editStoreManagerId}
+                    onChange={(e) => setEditStoreManagerId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">No Manager</option>
+                    {managers.map((manager) => (
+                      <option key={manager.id} value={manager.id}>
+                        {manager.name} ({manager.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Location</label>
-                <input
-                  value={editStoreLocation}
-                  onChange={(e) => setEditStoreLocation(e.target.value)}
-                  placeholder="Enter location"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Status</label>
-                <select
-                  value={editStoreStatus}
-                  onChange={(e) => setEditStoreStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="online">Online</option>
-                  <option value="closed">Closed</option>
-                  <option value="maintenance">Maintenance</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Manager</label>
-                <select
-                  value={editStoreManagerId}
-                  onChange={(e) => setEditStoreManagerId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">No Manager</option>
-                  {managers.map((manager) => (
-                    <option key={manager.id} value={manager.id}>
-                      {manager.name} ({manager.email})
-                    </option>
-                  ))}
-                </select>
+
+              {/* Right column: Suggestions + Current Staff */}
+              <div className="space-y-3">
+                {/* Suggested Recruitments */}
+                {(() => {
+                  const rc = usersByStore[editingStore.id] || { hasManager: !!editingStore.manager_name, hasStaff: false, hasCashier: false };
+                  const missing = [
+                    !rc.hasManager ? 'Manager' : null,
+                    !rc.hasStaff ? 'Staff' : null,
+                    !rc.hasCashier ? 'Cashier' : null,
+                  ].filter(Boolean);
+                  return (
+                    <div className="p-3 rounded-lg border text-sm flex items-start justify-between"
+                      style={{ borderColor: missing.length ? '#fecaca' : '#bbf7d0', background: missing.length ? '#fef2f2' : '#f0fdf4', color: '#111827' }}>
+                      <div>
+                        <p className="font-medium mb-1">Recruitment status</p>
+                        {missing.length === 0 ? (
+                          <p className="text-gray-700">All required roles are filled.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {missing.map(role => (
+                              <span key={role} className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Need {role}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <a href="/admin/staff" className="ml-3 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700">Manage staff</a>
+                    </div>
+                  );
+                })()}
+
+                {/* Current Staff List */}
+                <div>
+                  <label className="block text-sm text-gray-600 mb-2">Current Staff</label>
+                  <div className="max-h-56 overflow-auto border rounded-lg divide-y">
+                    {users.filter(u => u.store_id === editingStore.id).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-gray-500">No staff assigned to this store.</div>
+                    )}
+                    {users
+                      .filter(u => u.store_id === editingStore.id)
+                      .sort((a, b) => String(a.role).localeCompare(String(b.role)) || String(a.name).localeCompare(String(b.name)))
+                      .map(u => (
+                        <div key={u.id} className="px-3 py-2 text-sm flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-gray-900">{u.name}</p>
+                            <p className="text-gray-600 text-xs">{u.email}</p>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-800 capitalize">{u.role}</span>
+                        </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
