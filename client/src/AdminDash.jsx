@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useAutoLogout from './hooks/useAutoLogout';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import logo from './assets/images/icon.png';
 import AdvancedLoader from './components/AdvancedLoader';
 import LogoutConfirmation from './components/LogoutConfirmation';
@@ -551,7 +551,7 @@ const AdminDash = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Store Management</h3>
-                <a href="/admin/store" className="text-sm text-blue-600 hover:text-blue-700">Manage all</a>
+                <Link to="/admin/store" className="text-sm text-blue-600 hover:text-blue-700">Manage all</Link>
               </div>
               {isLoadingStores ? (
                 <div className="flex justify-center py-8">
@@ -593,7 +593,7 @@ const AdminDash = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Staff Overview</h3>
-                <a href="/admin/staff" className="text-sm text-blue-600 hover:text-blue-700">View all</a>
+                <Link to="/admin/staff" className="text-sm text-blue-600 hover:text-blue-700">View all</Link>
               </div>
               {isLoadingStaff ? (
                 <div className="flex justify-center py-8">
