@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import useAutoLogout from './hooks/useAutoLogout';
 import { useNavigate } from 'react-router-dom';
 import logo from './assets/images/icon.png';
 import AdvancedLoader from './components/AdvancedLoader';
@@ -14,6 +15,20 @@ const AdminDash = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Dashboard data state
+  const [dashboardData, setDashboardData] = useState({
+    totalStores: 0,
+    totalStaff: 0,
+    systemRevenue: 0
+  });
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
+  
+  // Stores and staff data for detailed sections
+  const [storesData, setStoresData] = useState([]);
+  const [staffData, setStaffData] = useState([]);
+  const [isLoadingStores, setIsLoadingStores] = useState(false);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
 
   // Function to decode JWT token
   const decodeToken = (token) => {
@@ -101,51 +116,6 @@ const AdminDash = () => {
     checkAuth();
   }, [navigate]);
 
-  // Auto-logout on token expiry or inactivity
-  useEffect(() => {
-    if (!user) return;
-
-    let expiryTimerId = null;
-    let idleTimerId = null;
-    const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-    const scheduleExpiryLogout = () => {
-      const token = localStorage.getItem('token');
-      const decoded = token ? decodeToken(token) : null;
-      if (decoded?.exp) {
-        const msUntilExpiry = decoded.exp * 1000 - Date.now();
-        if (msUntilExpiry <= 0) {
-          confirmLogout();
-        } else {
-          expiryTimerId = setTimeout(() => {
-            confirmLogout();
-          }, msUntilExpiry);
-        }
-      }
-    };
-
-    const resetIdleTimer = () => {
-      if (idleTimerId) clearTimeout(idleTimerId);
-      idleTimerId = setTimeout(() => {
-        confirmLogout();
-      }, IDLE_TIMEOUT_MS);
-    };
-
-    const activityHandler = () => resetIdleTimer();
-
-    scheduleExpiryLogout();
-    resetIdleTimer();
-
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    events.forEach(evt => window.addEventListener(evt, activityHandler, { passive: true }));
-
-    return () => {
-      if (expiryTimerId) clearTimeout(expiryTimerId);
-      if (idleTimerId) clearTimeout(idleTimerId);
-      events.forEach(evt => window.removeEventListener(evt, activityHandler));
-    };
-  }, [user]);
-
   const handleLogout = () => {
     setShowLogoutConfirm(true);
   };
@@ -163,6 +133,14 @@ const AdminDash = () => {
     // Navigate to login
     navigate('/login');
   };
+
+  // Auto-logout shared hook (30 minutes of actual inactivity)
+  useAutoLogout({
+    enabled: !!user,
+    decodeToken,
+    onLogout: confirmLogout,
+    idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+  });
 
   const cancelLogout = () => {
     setShowLogoutConfirm(false);
@@ -194,6 +172,113 @@ const AdminDash = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Fetch dashboard data
+  const fetchDashboardData = async () => {
+    setIsLoadingDashboard(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Fetch stores data
+      const storesResponse = await fetch('http://localhost:5000/stores', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Fetch users data
+      const usersResponse = await fetch('http://localhost:5000/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Fetch sales data for revenue calculation
+      const salesResponse = await fetch('http://localhost:5000/pos/admin/reports?limit=1000', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (storesResponse.ok && usersResponse.ok && salesResponse.ok) {
+        const storesData = await storesResponse.json();
+        const usersData = await usersResponse.json();
+        const salesData = await salesResponse.json();
+        
+        const totalStores = storesData.stores?.length || 0;
+        const totalStaff = usersData.users?.length || 0;
+        const systemRevenue = salesData.summary?.total_sales || 0;
+        
+        setDashboardData({
+          totalStores,
+          totalStaff,
+          systemRevenue
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setIsLoadingDashboard(false);
+    }
+  };
+
+  // Fetch stores data for Store Management section
+  const fetchStoresData = async () => {
+    setIsLoadingStores(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/stores', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStoresData(data.stores || []);
+      }
+    } catch (error) {
+      console.error('Error fetching stores data:', error);
+    } finally {
+      setIsLoadingStores(false);
+    }
+  };
+
+  // Fetch staff data for Staff Overview section
+  const fetchStaffData = async () => {
+    setIsLoadingStaff(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStaffData(data.users || []);
+      }
+    } catch (error) {
+      console.error('Error fetching staff data:', error);
+    } finally {
+      setIsLoadingStaff(false);
+    }
+  };
+
+  // Load dashboard data when user is authenticated
+  useEffect(() => {
+    if (user) {
+      fetchDashboardData();
+      fetchStoresData();
+      fetchStaffData();
+    }
+  }, [user]);
 
   const handleBackToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -266,13 +351,13 @@ const AdminDash = () => {
               </svg>
               Payroll
             </a>
-            <a href="#" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+            <a href="/admin/reports" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              Reports & Analytics
+              Sales Reports
             </a>
-            <a href="#" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+            <a href="/admin/inventory" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
@@ -379,7 +464,7 @@ const AdminDash = () => {
         <main className="p-6 pt-24">
           {/* User Info Card - Token Details */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Decoded JWT Token Details/Testing</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-blue-50 rounded-lg p-4">
                 <p className="text-sm font-medium text-blue-600">Name</p>
@@ -390,8 +475,8 @@ const AdminDash = () => {
                 <p className="text-lg font-semibold text-gray-900">{user.role}</p>
               </div>
               <div className="bg-purple-50 rounded-lg p-4">
-                <p className="text-sm font-medium text-purple-600">ID</p>
-                <p className="text-lg font-semibold text-gray-900">{user.id || 'N/A'}</p>
+                <p className="text-sm font-medium text-purple-600">Staff No</p>
+                <p className="text-lg font-semibold text-gray-900">NRT/{user.id || 'N/A'}</p>
               </div>
             </div>
             {/* <div className="mt-4 p-3 bg-gray-50 rounded-lg">
@@ -406,24 +491,17 @@ const AdminDash = () => {
                 ))}
               </div>
             </div> */}
-            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-              <p className="text-sm text-gray-600">
-                <strong>Raw Decoded Token Payload:</strong>
-              </p>
-              <pre className="text-xs font-mono bg-white p-2 rounded border overflow-auto max-h-32 mt-2">
-                {JSON.stringify(user, null, 2)}
-              </pre>
-            </div>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Stores</p>
-                  <p className="text-2xl font-bold text-gray-900">24</p>
-                  <p className="text-sm text-green-600">+2 new this month</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {isLoadingDashboard ? '...' : dashboardData.totalStores}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -437,8 +515,9 @@ const AdminDash = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Staff</p>
-                  <p className="text-2xl font-bold text-gray-900">156</p>
-                  <p className="text-sm text-blue-600">+12 new hires</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {isLoadingDashboard ? '...' : dashboardData.totalStaff}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -452,8 +531,9 @@ const AdminDash = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">System Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900">$124,780</p>
-                  <p className="text-sm text-purple-600">+18% from last month</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {isLoadingDashboard ? '...' : `₹${dashboardData.systemRevenue.toLocaleString()}`}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -463,20 +543,6 @@ const AdminDash = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Active Sessions</p>
-                  <p className="text-2xl font-bold text-gray-900">89</p>
-                  <p className="text-sm text-orange-600">+5% from yesterday</p>
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Charts and Tables Section */}
@@ -485,62 +551,108 @@ const AdminDash = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Store Management</h3>
-                <a href="#" className="text-sm text-blue-600 hover:text-blue-700">Manage all</a>
+                <a href="/admin/store" className="text-sm text-blue-600 hover:text-blue-700">Manage all</a>
               </div>
-              <div className="space-y-4">
-                {[
-                  { name: 'Downtown Store', location: 'City Center', status: 'Active', staff: 12 },
-                  { name: 'Mall Branch', location: 'Shopping Mall', status: 'Active', staff: 8 },
-                  { name: 'Suburban Store', location: 'Residential Area', status: 'Maintenance', staff: 6 },
-                  { name: 'Airport Store', location: 'Terminal 1', status: 'Active', staff: 15 },
-                ].map((store, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{store.name}</p>
-                      <p className="text-sm text-gray-600">{store.location} • {store.staff} staff</p>
+              {isLoadingStores ? (
+                <div className="flex justify-center py-8">
+                  <div className="text-blue-600">Loading stores...</div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {storesData.slice(0, 4).map((store) => {
+                    // Count staff for this store
+                    const storeStaffCount = staffData.filter(staff => staff.store_id === store.id).length;
+                    
+                    return (
+                      <div key={store.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-900">{store.name}</p>
+                          <p className="text-sm text-gray-600">{store.location} • {storeStaffCount} staff</p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            store.status === 'active' ? 'bg-green-100 text-green-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {store.status || 'Active'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {storesData.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      No stores found
                     </div>
-                    <div className="text-right">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        store.status === 'Active' ? 'bg-green-100 text-green-800' :
-                        'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {store.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Staff Overview */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Staff Overview</h3>
-                <a href="#" className="text-sm text-blue-600 hover:text-blue-700">View all</a>
+                <a href="/admin/staff" className="text-sm text-blue-600 hover:text-blue-700">View all</a>
               </div>
-              <div className="space-y-4">
-                {[
-                  { role: 'Store Managers', count: 24, status: 'All Active' },
-                  { role: 'Cashiers', count: 89, status: '2 Suspended' },
-                  { role: 'Inventory Staff', count: 32, status: 'All Active' },
-                  { role: 'Security', count: 11, status: '1 On Leave' },
-                ].map((staff, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <span className="text-blue-600 font-medium">{staff.count}</span>
+              {isLoadingStaff ? (
+                <div className="flex justify-center py-8">
+                  <div className="text-blue-600">Loading staff...</div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {(() => {
+                    // Group staff by role
+                    const roleGroups = staffData.reduce((acc, staff) => {
+                      const role = staff.role || 'Staff';
+                      if (!acc[role]) {
+                        acc[role] = { count: 0, active: 0, inactive: 0 };
+                      }
+                      acc[role].count++;
+                      if (staff.status === 'active') {
+                        acc[role].active++;
+                      } else {
+                        acc[role].inactive++;
+                      }
+                      return acc;
+                    }, {});
+
+                    // Convert to array and sort by count
+                    const roleArray = Object.entries(roleGroups)
+                      .map(([role, data]) => ({
+                        role: role.charAt(0).toUpperCase() + role.slice(1) + 's',
+                        count: data.count,
+                        active: data.active,
+                        inactive: data.inactive,
+                        status: data.inactive > 0 ? `${data.inactive} Inactive` : 'All Active'
+                      }))
+                      .sort((a, b) => b.count - a.count)
+                      .slice(0, 4);
+
+                    return roleArray.map((staff, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <span className="text-blue-600 font-medium">{staff.count}</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{staff.role}</p>
+                            <p className="text-sm text-gray-600">{staff.status}</p>
+                          </div>
+                        </div>
+                        <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                          Manage
+                        </button>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{staff.role}</p>
-                        <p className="text-sm text-gray-600">{staff.status}</p>
-                      </div>
+                    ));
+                  })()}
+                  {staffData.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      No staff found
                     </div>
-                    <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                      Manage
-                    </button>
-                  </div>
-                ))}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

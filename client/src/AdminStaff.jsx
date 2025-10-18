@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import useAutoLogout from './hooks/useAutoLogout';
 import { useNavigate } from 'react-router-dom';
 import AdvancedLoader from './components/AdvancedLoader';
 import LogoutConfirmation from './components/LogoutConfirmation';
@@ -30,14 +31,19 @@ const AdminStaff = () => {
   const exportMenuRef = useRef(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exportToCSV = (rows, filename = 'staff.csv') => {
-    const headers = ['id','name','email','role','store_id','status','created_at'];
+    const headers = ['staff_no','name','email','role','store_id','status','created_at'];
     const escape = (v) => {
       if (v === null || v === undefined) return '';
       const s = String(v).replace(/"/g, '""');
       return /[",\n]/.test(s) ? `"${s}"` : s;
     };
     const csv = [headers.join(',')].concat(
-      rows.map(r => headers.map(h => escape(r[h])).join(','))
+      rows.map(r => headers.map(h => {
+        if (h === 'staff_no') {
+          return escape(`NRT/${r.id || ''}`);
+        }
+        return escape(r[h]);
+      }).join(','))
     ).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -188,53 +194,6 @@ const AdminStaff = () => {
     checkAuth();
   }, [navigate]);
 
-  // Auto-logout: on token expiry or inactivity
-  useEffect(() => {
-    if (!user) return;
-
-    let expiryTimerId = null;
-    let idleTimerId = null;
-    const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-    const scheduleExpiryLogout = () => {
-      const token = localStorage.getItem('token');
-      const decoded = token ? decodeToken(token) : null;
-      if (decoded?.exp) {
-        const msUntilExpiry = decoded.exp * 1000 - Date.now();
-        if (msUntilExpiry <= 0) {
-          confirmLogout();
-        } else {
-          expiryTimerId = setTimeout(() => {
-            confirmLogout();
-          }, msUntilExpiry);
-        }
-      }
-    };
-
-    const resetIdleTimer = () => {
-      if (idleTimerId) clearTimeout(idleTimerId);
-      idleTimerId = setTimeout(() => {
-        confirmLogout();
-      }, IDLE_TIMEOUT_MS);
-    };
-
-    const activityHandler = () => resetIdleTimer();
-
-    // Start timers
-    scheduleExpiryLogout();
-    resetIdleTimer();
-
-    // Bind activity listeners
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    events.forEach(evt => window.addEventListener(evt, activityHandler, { passive: true }));
-
-    return () => {
-      if (expiryTimerId) clearTimeout(expiryTimerId);
-      if (idleTimerId) clearTimeout(idleTimerId);
-      events.forEach(evt => window.removeEventListener(evt, activityHandler));
-    };
-  }, [user]);
-
   // Close profile dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setProfileDropdownOpen(false); };
@@ -325,6 +284,14 @@ const AdminStaff = () => {
   const handleLogout = () => setShowLogoutConfirm(true);
   const confirmLogout = async () => { setIsLoggingOut(true); await new Promise(r => setTimeout(r, 1200)); localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); };
   const cancelLogout = () => { setShowLogoutConfirm(false); setIsLoggingOut(false); };
+
+  // Auto-logout shared hook (30 minutes of actual inactivity)
+  useAutoLogout({
+    enabled: !!user,
+    decodeToken,
+    onLogout: confirmLogout,
+    idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+  });
 
   const openEditModal = (s) => { setEditingStaff(s); setEditName(s.name || ''); setEditEmail(s.email || ''); setEditRole(s.role || 'staff'); setEditStore(s.store || ''); setEditStatus(s.status || 'active'); setShowEditModal(true); };
   const openDeleteConfirm = (s) => { setDeletingStaff(s); setShowDeleteConfirm(true); };
@@ -591,7 +558,7 @@ const AdminStaff = () => {
 
               {showAdvancedFilters && (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                  <input placeholder="ID" value={filterId} onChange={(e) => setFilterId(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 text-sm" />
+                  <input placeholder="Staff No" value={filterId} onChange={(e) => setFilterId(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 text-sm" />
                   <input placeholder="Name" value={filterName} onChange={(e) => setFilterName(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 text-sm" />
                   <input placeholder="Email" value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 text-sm" />
                   <input placeholder="Store" value={filterStore} onChange={(e) => setFilterStore(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 text-sm" />
@@ -743,7 +710,7 @@ const AdminStaff = () => {
                       <table className="min-w-full text-sm">
                         <thead>
                           <tr className="text-left text-gray-600">
-                            <th className="px-3 py-2">ID</th>
+                            <th className="px-3 py-2">Staff No</th>
                             <th className="px-3 py-2">Name</th>
                             <th className="px-3 py-2">Email</th>
                             <th className="px-3 py-2">Store</th>
@@ -754,7 +721,7 @@ const AdminStaff = () => {
                         <tbody className="divide-y">
                           {people.map(s => (
                             <tr key={s.id} className="align-top">
-                              <td className="px-3 py-2">{s.id}</td>
+                              <td className="px-3 py-2">NRT/{s.id}</td>
                               <td className="px-3 py-2"><button onClick={() => openEditModal(s)} className="text-blue-600 hover:underline">{s.name}</button></td>
                               <td className="px-3 py-2 text-gray-700">{s.email}</td>
                               <td className="px-3 py-2">{storeIdToName(s.store_id)}</td>
@@ -774,7 +741,7 @@ const AdminStaff = () => {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-600">
-                    <th className="px-3 py-2">ID</th>
+                    <th className="px-3 py-2">Staff No</th>
                     <th className="px-3 py-2">Name</th>
                     <th className="px-3 py-2">Email</th>
                     <th className="px-3 py-2">Role</th>
@@ -786,7 +753,7 @@ const AdminStaff = () => {
                 <tbody className="divide-y">
                   {sortedStaff.map((s) => (
                     <tr key={s.id} className="align-top">
-                      <td className="px-3 py-2">{s.id}</td>
+                      <td className="px-3 py-2">NRT/{s.id}</td>
                       <td className="px-3 py-2">
                         <button onClick={() => openEditModal(s)} className="text-blue-600 hover:underline">{s.name}</button>
                       </td>

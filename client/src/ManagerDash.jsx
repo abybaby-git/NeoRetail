@@ -13,6 +13,18 @@ const ManagerDash = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [dashboardData, setDashboardData] = useState({
+    salesSummary: null,
+    storeInfo: null,
+    lowStockCount: 0,
+    staffCount: 0,
+    recentSales: []
+  });
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [showSaleDetails, setShowSaleDetails] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   const dropdownRef = useRef(null);
 
   // Function to decode JWT token
@@ -90,6 +102,11 @@ const ManagerDash = () => {
         
         setUser(userFromToken);
         setIsLoading(false);
+        
+        // Fetch dashboard data if user has store_id
+        if (userFromToken.store_id) {
+          fetchDashboardData(userFromToken.store_id);
+        }
       } catch (error) {
         console.error('Error processing token:', error);
         localStorage.removeItem('token');
@@ -126,6 +143,135 @@ const ManagerDash = () => {
 
   const toggleProfileDropdown = () => {
     setProfileDropdownOpen(!profileDropdownOpen);
+  };
+
+  // Handle sale details modal
+  const handleSaleClick = async (sale) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/pos/sales/report?store_id=${user.store_id}&date_from=2025-10-18&date_to=2025-10-18`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Find the specific sale in the report data
+        const detailedSale = data.sales.find(s => s.sale_id === sale.id);
+        if (detailedSale) {
+          setSelectedSale(detailedSale);
+          setShowSaleDetails(true);
+        } else {
+          // Fallback to basic sale data if not found in report
+          setSelectedSale(sale);
+          setShowSaleDetails(true);
+        }
+      } else {
+        // Fallback to basic sale data if API fails
+        setSelectedSale(sale);
+        setShowSaleDetails(true);
+      }
+    } catch (error) {
+      console.error('Error fetching sale details:', error);
+      // Fallback to basic sale data if error occurs
+      setSelectedSale(sale);
+      setShowSaleDetails(true);
+    }
+  };
+
+  const closeSaleDetails = () => {
+    setSelectedSale(null);
+    setShowSaleDetails(false);
+  };
+
+  // Pagination helper functions
+  const getPaginatedSales = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return dashboardData.recentSales.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = () => {
+    return Math.ceil(dashboardData.recentSales.length / itemsPerPage);
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  // Function to fetch dashboard data
+  const fetchDashboardData = async (storeId) => {
+    setIsDataLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Fetch sales summary
+      const salesResponse = await fetch(`http://localhost:5000/pos/sales/report?store_id=${storeId}&date_from=2025-10-18&date_to=2025-10-18`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Fetch store info
+      const storeResponse = await fetch(`http://localhost:5000/stores/${storeId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Fetch low stock count
+      const lowStockResponse = await fetch(`http://localhost:5000/pos/low-stock/${storeId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Fetch staff count
+      const staffResponse = await fetch(`http://localhost:5000/users?store_id=${storeId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Fetch recent sales
+      const recentSalesResponse = await fetch(`http://localhost:5000/pos/sales?store_id=${storeId}&limit=5`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const salesData = salesResponse.ok ? await salesResponse.json() : { summary: { total_sales: 0, total_transactions: 0 } };
+      const storeResponseData = storeResponse.ok ? await storeResponse.json() : null;
+      const storeData = storeResponseData?.store || null; // Extract store from response
+      const lowStockData = lowStockResponse.ok ? await lowStockResponse.json() : { total_items: 0 };
+      const staffData = staffResponse.ok ? await staffResponse.json() : { users: [] };
+      const recentSalesData = recentSalesResponse.ok ? await recentSalesResponse.json() : { sales: [] };
+
+      // Debug logging
+      console.log('Store Response Status:', storeResponse.status);
+      console.log('Store Response Data:', storeResponseData);
+      console.log('Store Data:', storeData);
+      console.log('Store ID from token:', storeId);
+
+      setDashboardData({
+        salesSummary: salesData.summary || { total_sales: 0, total_transactions: 0, total_discount: 0, total_tax: 0 },
+        storeInfo: storeData,
+        lowStockCount: lowStockData.total_items || 0,
+        staffCount: staffData.users?.length || 0,
+        recentSales: recentSalesData.sales || []
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setIsDataLoading(false);
+    }
   };
 
   // Close dropdown when clicking outside
@@ -203,30 +349,42 @@ const ManagerDash = () => {
               </svg>
               Dashboard
             </a>
-            <a href="#" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+            <button 
+              onClick={() => navigate('/manager/sales')}
+              className="flex items-center w-full px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors text-left"
+            >
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
               </svg>
               Sales & POS
-            </a>
-            <a href="#" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+            </button>
+            <button 
+              onClick={() => navigate('/manager/inventory')}
+              className="flex items-center w-full px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors text-left"
+            >
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
               Inventory
-            </a>
-            <a href="#" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+            </button>
+            <button 
+              onClick={() => navigate('/manager/staff')}
+              className="flex items-center w-full px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors text-left"
+            >
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               Staff Management
-            </a>
-            <a href="#" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+            </button>
+            <button 
+              onClick={() => navigate('/manager/reports')}
+              className="flex items-center w-full px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors text-left"
+            >
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               Reports
-            </a>
+            </button>
             <a href="#" className="flex items-center px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -324,41 +482,28 @@ const ManagerDash = () => {
         </header>
         {/* Add top padding so content is not hidden behind header */}
         <main className="p-6 pt-24">
-          {/* User Info Card - Token Details */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Decoded JWT Token Details/Testing</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <p className="text-sm font-medium text-blue-600">Name</p>
-                <p className="text-lg font-semibold text-gray-900">{user.name}</p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <p className="text-sm font-medium text-green-600">Role</p>
-                <p className="text-lg font-semibold text-gray-900">{user.role}</p>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-4">
-                <p className="text-sm font-medium text-purple-600">ID</p>
-                <p className="text-lg font-semibold text-gray-900">{user.id || 'N/A'}</p>
-              </div>
-            </div>
-            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-              <p className="text-sm text-gray-600">
-                <strong>Raw Decoded Token Payload:</strong>
-              </p>
-              <pre className="text-xs font-mono bg-white p-2 rounded border overflow-auto max-h-32 mt-2">
-                {JSON.stringify(user, null, 2)}
-              </pre>
-            </div>
-          </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Today's Sales</p>
-                  <p className="text-2xl font-bold text-gray-900">$8,420</p>
-                  <p className="text-sm text-green-600">+12% from yesterday</p>
+                  {isDataLoading ? (
+                    <div className="animate-pulse">
+                      <div className="h-8 bg-gray-200 rounded w-24 mb-2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-20"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold text-gray-900">
+                        ₹{dashboardData.salesSummary?.total_sales?.toLocaleString() || '0'}
+                      </p>
+                      <p className="text-sm text-green-600">
+                        {dashboardData.salesSummary?.total_transactions || 0} transactions
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -371,9 +516,18 @@ const ManagerDash = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Active Staff</p>
-                  <p className="text-2xl font-bold text-gray-900">12</p>
-                  <p className="text-sm text-blue-600">2 on break</p>
+                  <p className="text-sm font-medium text-gray-600">Total Staff</p>
+                  {isDataLoading ? (
+                    <div className="animate-pulse">
+                      <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-20"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold text-gray-900">{dashboardData.staffCount || 0}</p>
+                      <p className="text-sm text-blue-600">Store team members</p>
+                    </>
+                  )}
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -387,31 +541,124 @@ const ManagerDash = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Low Stock Items</p>
-                  <p className="text-2xl font-bold text-gray-900">8</p>
-                  <p className="text-sm text-orange-600">Need reorder</p>
+                  {isDataLoading ? (
+                    <div className="animate-pulse">
+                      <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-20"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className={`text-2xl font-bold ${dashboardData.lowStockCount > 0 ? 'text-orange-600' : 'text-gray-900'}`}>
+                        {dashboardData.lowStockCount || 0}
+                      </p>
+                      <p className={`text-sm ${dashboardData.lowStockCount > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                        {dashboardData.lowStockCount > 0 ? 'Need reorder' : 'All items in stock'}
+                      </p>
+                    </>
+                  )}
                 </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className={`w-12 h-12 ${dashboardData.lowStockCount > 0 ? 'bg-orange-100' : 'bg-green-100'} rounded-lg flex items-center justify-center`}>
+                  <svg className={`w-6 h-6 ${dashboardData.lowStockCount > 0 ? 'text-orange-600' : 'text-green-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Customer Count</p>
-                  <p className="text-2xl font-bold text-gray-900">156</p>
-                  <p className="text-sm text-purple-600">+23 today</p>
+          </div>
+
+          {/* Store Info Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <div className="flex items-center mb-6">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Store Information</h3>
+            </div>
+            
+            {isDataLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="p-4 bg-gray-50 rounded-lg animate-pulse">
+                    <div className="h-4 bg-gray-300 rounded w-20 mb-2"></div>
+                    <div className="h-6 bg-gray-300 rounded w-32"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100">
+                  <div className="flex items-center mb-2">
+                    <svg className="w-5 h-5 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    <p className="text-sm font-medium text-purple-600">Store ID</p>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900">STR-{dashboardData.storeInfo?.id || 'N/A'}</p>
                 </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
+                  <div className="flex items-center mb-2">
+                    <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    <p className="text-sm font-medium text-blue-600">Store Name</p>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900">{dashboardData.storeInfo?.name || 'N/A'}</p>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-100">
+                  <div className="flex items-center mb-2">
+                    <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <p className="text-sm font-medium text-green-600">Location</p>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900">{dashboardData.storeInfo?.location || 'N/A'}</p>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border border-orange-100">
+                  <div className="flex items-center mb-2">
+                    <svg className="w-5 h-5 text-orange-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm font-medium text-orange-600">Status</p>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900 capitalize">{dashboardData.storeInfo?.status || 'N/A'}</p>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100">
+                  <div className="flex items-center mb-2">
+                    <svg className="w-5 h-5 text-indigo-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-sm font-medium text-indigo-600">Created</p>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900">
+                    {dashboardData.storeInfo?.created_at ? 
+                      new Date(dashboardData.storeInfo.created_at).toLocaleDateString('en-IN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                      }) : 'N/A'
+                    }
+                  </p>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-pink-50 to-rose-50 rounded-lg border border-pink-100">
+                  <div className="flex items-center mb-2">
+                    <svg className="w-5 h-5 text-pink-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
+                    <p className="text-sm font-medium text-pink-600">Manager</p>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900">{dashboardData.storeInfo?.manager_name || 'Not Assigned'}</p>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Charts and Tables Section */}
@@ -419,94 +666,278 @@ const ManagerDash = () => {
             {/* Sales Overview */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Sales Overview</h3>
-                <a href="#" className="text-sm text-green-600 hover:text-green-700">View details</a>
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Today's Sales Summary</h3>
+                </div>
+                <button 
+                  onClick={() => navigate('/manager/reports')}
+                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  View details
+                </button>
               </div>
+              {isDataLoading ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="flex items-center justify-between p-5 bg-gray-50 rounded-xl animate-pulse">
+                      <div className="flex items-center">
+                        <div className="w-12 h-12 bg-gray-300 rounded-lg mr-4"></div>
+                        <div>
+                          <div className="h-4 bg-gray-300 rounded w-24 mb-2"></div>
+                          <div className="h-3 bg-gray-300 rounded w-32"></div>
+                        </div>
+                      </div>
+                      <div className="h-6 bg-gray-300 rounded w-20"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="space-y-4">
-                {[
-                  { time: '9:00 AM', sales: 1200, transactions: 15 },
-                  { time: '12:00 PM', sales: 2800, transactions: 28 },
-                  { time: '3:00 PM', sales: 2100, transactions: 22 },
-                  { time: '6:00 PM', sales: 2300, transactions: 19 },
-                ].map((period, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{period.time}</p>
-                      <p className="text-sm text-gray-600">{period.transactions} transactions</p>
+                  <div className="flex items-center justify-between p-5 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-100">
+                    <div className="flex items-center">
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">Total Sales</p>
+                        <p className="text-sm text-gray-600">{dashboardData.salesSummary?.total_transactions || 0} transactions today</p>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-green-600">${period.sales}</p>
+                      <p className="text-2xl font-bold text-green-600">₹{parseFloat(dashboardData.salesSummary?.total_sales || 0).toLocaleString()}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Staff Schedule */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Staff Schedule</h3>
-                <a href="#" className="text-sm text-blue-600 hover:text-blue-700">Manage schedule</a>
-              </div>
-              <div className="space-y-4">
-                {[
-                  { name: 'John Cashier', shift: 'Morning', status: 'Active', time: '8:00 AM - 4:00 PM' },
-                  { name: 'Sarah Stock', shift: 'Afternoon', status: 'On Break', time: '12:00 PM - 8:00 PM' },
-                  { name: 'Mike Security', shift: 'Evening', status: 'Active', time: '4:00 PM - 12:00 AM' },
-                  { name: 'Lisa Manager', shift: 'Full Day', status: 'Active', time: '9:00 AM - 6:00 PM' },
-                ].map((staff, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  
+                  <div className="flex items-center justify-between p-5 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100">
+                    <div className="flex items-center">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                        <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                      </div>
                     <div>
-                      <p className="font-medium text-gray-900">{staff.name}</p>
-                      <p className="text-sm text-gray-600">{staff.time}</p>
+                        <p className="font-semibold text-gray-900">Total Discount</p>
+                        <p className="text-sm text-gray-600">Amount given as discount</p>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        staff.status === 'Active' ? 'bg-green-100 text-green-800' :
-                        'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {staff.status}
+                      <p className="text-2xl font-bold text-blue-600">₹{parseFloat(dashboardData.salesSummary?.total_discount || 0).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  
+              </div>
+              )}
+            </div>
+
+            {/* Store Overview */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Store Overview</h3>
+                </div>
+                <button 
+                  onClick={() => navigate('/manager/staff')}
+                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                  Manage staff
+                </button>
+              </div>
+              {isDataLoading ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="flex items-center justify-between p-5 bg-gray-50 rounded-xl animate-pulse">
+                      <div className="flex items-center">
+                        <div className="w-12 h-12 bg-gray-300 rounded-lg mr-4"></div>
+                        <div>
+                          <div className="h-4 bg-gray-300 rounded w-24 mb-2"></div>
+                          <div className="h-3 bg-gray-300 rounded w-20"></div>
+                        </div>
+                      </div>
+                      <div className="h-8 bg-gray-300 rounded-full w-16"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+              <div className="space-y-4">
+                  <div className="flex items-center justify-between p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                    <div className="flex items-center">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                        <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">Total Staff</p>
+                        <p className="text-sm text-gray-600">All team members</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-flex items-center px-4 py-2 text-lg font-bold rounded-full bg-blue-100 text-blue-800">
+                        {dashboardData.staffCount}
                       </span>
                     </div>
                   </div>
-                ))}
-              </div>
+                  
+                  <div className="flex items-center justify-between p-5 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl border border-orange-100">
+                    <div className="flex items-center">
+                      <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mr-4">
+                        <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                    <div>
+                        <p className="font-semibold text-gray-900">Low Stock Items</p>
+                        <p className="text-sm text-gray-600">Need attention</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`inline-flex items-center px-4 py-2 text-lg font-bold rounded-full ${
+                        dashboardData.lowStockCount > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {dashboardData.lowStockCount}
+                      </span>
+                    </div>
+                  </div>
+                  
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Quick Actions</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <button className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
-                <svg className="w-8 h-8 text-green-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-                <span className="text-sm font-medium text-gray-900">New Sale</span>
-              </button>
-              
-              <button className="flex flex-col items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                <svg className="w-8 h-8 text-blue-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-                <span className="text-sm font-medium text-gray-900">Check Inventory</span>
-              </button>
-              
-              <button className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
-                <svg className="w-8 h-8 text-purple-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <span className="text-sm font-medium text-gray-900">Staff Schedule</span>
-              </button>
-              
-              <button className="flex flex-col items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
-                <svg className="w-8 h-8 text-orange-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <span className="text-sm font-medium text-gray-900">Daily Report</span>
+          {/* Recent Sales */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Recent Sales</h3>
+              <button 
+                onClick={() => navigate('/manager/sales')}
+                className="text-sm text-green-600 hover:text-green-700"
+              >
+                Start new sale
               </button>
             </div>
+            {isDataLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg animate-pulse">
+                    <div>
+                      <div className="h-3 bg-gray-300 rounded w-16 mb-1"></div>
+                      <div className="h-3 bg-gray-300 rounded w-24"></div>
+                    </div>
+                    <div className="h-3 bg-gray-300 rounded w-12"></div>
+                  </div>
+                ))}
+              </div>
+            ) : dashboardData.recentSales.length > 0 ? (
+              <>
+                <div className="space-y-2">
+                  {getPaginatedSales().map((sale, index) => (
+                    <div 
+                      key={sale.id || index} 
+                      className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                      onClick={() => handleSaleClick(sale)}
+                    >
+                      <div>
+                        <p className="font-medium text-gray-900 text-sm">Sale #{sale.id}</p>
+                        <p className="text-xs text-gray-600">
+                          {new Date(sale.sale_date).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })} • {sale.cashier_name || 'Unknown'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-green-600 text-sm">₹{parseFloat(sale.grand_total).toLocaleString()}</p>
+                        <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${
+                          sale.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {sale.payment_status}
+                        </span>
+            </div>
+                    </div>
+                  ))}
           </div>
+
+                {/* Pagination */}
+                {getTotalPages() > 1 && (
+                  <div className="flex items-center justify-between mt-4 px-2 py-2">
+                    <div className="text-sm text-gray-700">
+                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, dashboardData.recentSales.length)} of {dashboardData.recentSales.length} sales
+                    </div>
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-2 py-1.5 text-xs font-medium text-gray-500 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-2 py-1.5 text-xs font-medium rounded ${
+                            currentPage === page
+                              ? 'text-white bg-green-600 border border-green-600'
+                              : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === getTotalPages()}
+                        className="px-2 py-1.5 text-xs font-medium text-gray-500 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-6">
+                <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No recent sales</h3>
+                <p className="mt-1 text-sm text-gray-500">Start making sales to see them here.</p>
+                <div className="mt-4">
+                  <button
+                    onClick={() => navigate('/manager/sales')}
+                    className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                  >
+                    <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                    Start New Sale
+              </button>
+            </div>
+              </div>
+            )}
+          </div>
+
         </main>
       </div>
 
@@ -537,6 +968,142 @@ const ManagerDash = () => {
         onCancel={cancelLogout}
         isLoading={isLoggingOut}
       />
+
+      {/* Sale Details Modal */}
+      {showSaleDetails && selectedSale && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">Sale Details - #{selectedSale.id}</h3>
+                <button
+                  onClick={closeSaleDetails}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Sale Information */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Sale Information</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Sale ID:</span>
+                        <span className="font-medium">#{selectedSale.id}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Date:</span>
+                        <span className="font-medium">
+                          {new Date(selectedSale.sale_date).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Cashier:</span>
+                        <span className="font-medium">{selectedSale.cashier_name || 'Unknown'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Payment Information</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Payment Method:</span>
+                        <span className="font-medium">{selectedSale.payment_method || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Status:</span>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          selectedSale.payment_status === 'paid' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {selectedSale.payment_status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Order Summary */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Order Summary</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Subtotal:</span>
+                        <span className="font-medium">₹{parseFloat(selectedSale.total_amount || 0).toFixed(2)}</span>
+                      </div>
+                      {selectedSale.total_discount > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Discount:</span>
+                          <span className="font-medium text-green-600">-₹{parseFloat(selectedSale.total_discount).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {selectedSale.total_tax > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Tax:</span>
+                          <span className="font-medium">₹{parseFloat(selectedSale.total_tax).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between border-t border-gray-200 pt-2">
+                        <span className="font-medium text-gray-900">Total:</span>
+                        <span className="font-bold text-lg">₹{parseFloat(selectedSale.grand_total).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items Sold Section */}
+              {selectedSale.items && selectedSale.items.length > 0 && (
+                <div className="mt-6">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Items Sold</h4>
+                    <div className="space-y-2">
+                      {selectedSale.items.map((item, index) => (
+                        <div key={index} className="bg-white p-3 rounded border">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium text-sm">{item.product_name}</p>
+                              <p className="text-xs text-gray-500">SKU: {item.sku}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium">₹{parseFloat(item.selling_price).toFixed(2)}</p>
+                              <p className="text-xs text-gray-500">× {item.quantity}</p>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
+                            <div className="text-xs text-gray-500">
+                              {item.discount > 0 && (
+                                <span className="text-green-600">Discount: ₹{parseFloat(item.discount).toFixed(2)}</span>
+                              )}
+                            </div>
+                            <div className="text-sm font-medium">
+                              Total: ₹{parseFloat(item.total_amount).toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

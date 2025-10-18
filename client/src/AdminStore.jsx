@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import useAutoLogout from './hooks/useAutoLogout';
 import { useNavigate } from 'react-router-dom';
 import AdvancedLoader from './components/AdvancedLoader';
 import LogoutConfirmation from './components/LogoutConfirmation';
@@ -185,51 +186,6 @@ const AdminStore = () => {
     checkAuth();
   }, [navigate]);
 
-  // Auto-logout on token expiry or inactivity
-  useEffect(() => {
-    if (!user) return;
-
-    let expiryTimerId = null;
-    let idleTimerId = null;
-    const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-    const scheduleExpiryLogout = () => {
-      const token = localStorage.getItem('token');
-      const decoded = token ? decodeToken(token) : null;
-      if (decoded?.exp) {
-        const msUntilExpiry = decoded.exp * 1000 - Date.now();
-        if (msUntilExpiry <= 0) {
-          confirmLogout();
-        } else {
-          expiryTimerId = setTimeout(() => {
-            confirmLogout();
-          }, msUntilExpiry);
-        }
-      }
-    };
-
-    const resetIdleTimer = () => {
-      if (idleTimerId) clearTimeout(idleTimerId);
-      idleTimerId = setTimeout(() => {
-        confirmLogout();
-      }, IDLE_TIMEOUT_MS);
-    };
-
-    const activityHandler = () => resetIdleTimer();
-
-    scheduleExpiryLogout();
-    resetIdleTimer();
-
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    events.forEach(evt => window.addEventListener(evt, activityHandler, { passive: true }));
-
-    return () => {
-      if (expiryTimerId) clearTimeout(expiryTimerId);
-      if (idleTimerId) clearTimeout(idleTimerId);
-      events.forEach(evt => window.removeEventListener(evt, activityHandler));
-    };
-  }, [user]);
-
   const handleLogout = () => setShowLogoutConfirm(true);
 
   const confirmLogout = async () => {
@@ -239,6 +195,14 @@ const AdminStore = () => {
     localStorage.removeItem('user');
     navigate('/login');
   };
+
+  // Auto-logout shared hook (30 minutes of actual inactivity)
+  useAutoLogout({
+    enabled: !!user,
+    decodeToken,
+    onLogout: confirmLogout,
+    idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+  });
 
   // Show toast notification
   const showToast = (message, type = 'success') => {

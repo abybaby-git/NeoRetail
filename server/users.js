@@ -2,15 +2,45 @@ const express = require('express');
 const router = express.Router();
 const pool = require('./db');
 
+// GET /users/me -> get current user info (for debugging)
+router.get('/me', async (req, res) => {
+  try {
+    // This endpoint would need authentication middleware in a real app
+    // For now, we'll use it for debugging
+    const { user_id } = req.query;
+    
+    if (!user_id) {
+      return res.status(400).json({ message: 'user_id is required' });
+    }
+    
+    const result = await pool.query(
+      `SELECT id, name, email, role, store_id, status, created_at
+       FROM users
+       WHERE id = $1`,
+      [user_id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.status(200).json({ user: result.rows[0] });
+  } catch (err) {
+    console.error('Failed to fetch user info:', err);
+    res.status(500).json({ message: 'Failed to fetch user info' });
+  }
+});
+
 // GET /users -> list all users with optional filters
 router.get('/', async (req, res) => {
   try {
-    const { role, status, q } = req.query;
+    const { role, status, q, store_id } = req.query;
     const conditions = [];
     const params = [];
 
     if (role) { params.push(role.toLowerCase()); conditions.push(`LOWER(role) = $${params.length}`); }
     if (status) { params.push(status.toLowerCase()); conditions.push(`LOWER(status) = $${params.length}`); }
+    if (store_id) { params.push(store_id); conditions.push(`store_id = $${params.length}`); }
     if (q) { params.push(`%${q.toLowerCase()}%`); conditions.push(`(LOWER(name) LIKE $${params.length} OR LOWER(email) LIKE $${params.length})`); }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

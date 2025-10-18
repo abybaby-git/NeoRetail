@@ -6,6 +6,12 @@ const bodyParser = require('body-parser');
 const loginRoute = require('./login');
 const storesRoute = require('./stores');
 const usersRoute = require('./users');
+const categoriesRoute = require('./categories');
+const productsRoute = require('./products');
+const sellersRoute = require('./sellers');
+const purchasesRoute = require('./purchases');
+const stockRoute = require('./stock');
+const posRoute = require('./pos');
 
 const app = express();
 const PORT = 5000;
@@ -21,6 +27,12 @@ app.use(bodyParser.json());
 app.use('/login', loginRoute);
 app.use('/stores', storesRoute);
 app.use('/users', usersRoute);
+app.use('/categories', categoriesRoute);
+app.use('/products', productsRoute);
+app.use('/sellers', sellersRoute);
+app.use('/purchases', purchasesRoute);
+app.use('/stock', stockRoute);
+app.use('/pos', posRoute);
 
 // Server Start
 app.listen(PORT, () => {

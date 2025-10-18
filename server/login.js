@@ -40,7 +40,7 @@ router.post('/', async (req, res) => {
   try {
     // Step 1: Fetch user info
     const result = await pool.query(
-      `SELECT uc.user_id, uc.password_hash, u.name, u.role, u.status
+      `SELECT uc.user_id, uc.password_hash, u.name, u.role, u.status, u.store_id
        FROM user_credentials uc
        JOIN users u ON uc.user_id = u.id
        WHERE uc.username = $1`,
@@ -126,9 +126,10 @@ router.post('/', async (req, res) => {
         user_id: user.user_id,
         name: user.name,
         role: user.role,
+        store_id: user.store_id,
       },
       JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '8h' } // 8 hours for admin sessions
     );
 
     return res.status(200).json({
@@ -138,6 +139,7 @@ router.post('/', async (req, res) => {
         user_id: user.user_id,
         name: user.name,
         role: user.role,
+        store_id: user.store_id,
       },
     });
 
