@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import horizontalLogo from './assets/images/horizondal-logo.png';
+import verticalLogo from './assets/images/vertical-logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -111,7 +112,7 @@ const Login = () => {
         <div className="absolute inset-0 z-10" style={{ background: 'linear-gradient(to bottom right, rgba(61, 133, 127, 0.2), rgba(61, 133, 127, 0.2))' }}></div>
         <img 
           className="h-full w-full object-cover relative z-0" 
-          src="./src/assets/images/vertical-logo.png" 
+          src={verticalLogo} 
           alt="Retail dashboard" 
         />
         {/* Overlay content */}
