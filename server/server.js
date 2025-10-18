@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const fs = require('fs');
 
 const loginRoute = require('./login');
 const storesRoute = require('./stores');
@@ -24,8 +25,15 @@ app.set('trust proxy', true);
 app.use(cors());
 app.use(bodyParser.json());
 
-// Serve static files from the React app build directory
-app.use(express.static(path.join(__dirname, '../client/dist')));
+// Serve static files from the React app build directory (if it exists)
+const clientDistPath = path.join(__dirname, '../client/dist');
+try {
+  if (fs.existsSync(clientDistPath)) {
+    app.use(express.static(clientDistPath));
+  }
+} catch (error) {
+  console.log('Client build directory not found, skipping static file serving');
+}
 
 // Routes
 app.use('/login', loginRoute);
@@ -40,7 +48,16 @@ app.use('/pos', posRoute);
 
 // Catch all handler: send back React's index.html file for any non-API routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  const indexPath = path.join(__dirname, '../client/dist/index.html');
+  try {
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).json({ message: 'Frontend not built yet. Please build the client first.' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 });
 
 // Server Start
