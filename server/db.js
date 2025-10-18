@@ -7,7 +7,13 @@ const pool = new Pool({
 });
 
 pool.connect()
-  .then(() => console.log('PostgreSQL connected successfully.'))
-  .catch(err => console.error('PostgreSQL connection error:', err));
+  .then(() => {
+    console.log('PostgreSQL connected successfully.');
+    console.log('Database URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
+  })
+  .catch(err => {
+    console.error('PostgreSQL connection error:', err);
+    console.error('Connection string:', process.env.DATABASE_URL ? 'Set' : 'Not set');
+  });
 
 module.exports = pool;
