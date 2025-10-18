@@ -180,7 +180,7 @@ const AdminDash = () => {
       const token = localStorage.getItem('token');
       
       // Fetch stores data
-      const storesResponse = await fetch('https://neoretail.onrender.com//stores', {
+        const storesResponse = await fetch('https://neoretail.onrender.com/stores', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -188,7 +188,7 @@ const AdminDash = () => {
       });
       
       // Fetch users data
-      const usersResponse = await fetch('https://neoretail.onrender.com//users', {
+        const usersResponse = await fetch('https://neoretail.onrender.com/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -196,7 +196,7 @@ const AdminDash = () => {
       });
       
       // Fetch sales data for revenue calculation
-      const salesResponse = await fetch('https://neoretail.onrender.com//pos/admin/reports?limit=1000', {
+        const salesResponse = await fetch('https://neoretail.onrender.com/pos/admin/reports?limit=1000', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -230,7 +230,7 @@ const AdminDash = () => {
     setIsLoadingStores(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://neoretail.onrender.com//stores', {
+      const response = await fetch('https://neoretail.onrender.com/stores', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -253,7 +253,7 @@ const AdminDash = () => {
     setIsLoadingStaff(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://neoretail.onrender.com//users', {
+      const response = await fetch('https://neoretail.onrender.com/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

@@ -177,7 +177,7 @@ const AdminReport = () => {
   const fetchStores = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://neoretail.onrender.com//stores', {
+      const response = await fetch('https://neoretail.onrender.com/stores', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -213,7 +213,7 @@ const AdminReport = () => {
         params.append('date_to', dateTo);
       }
 
-      const response = await fetch(`https://neoretail.onrender.com//pos/admin/reports?${params}`, {
+      const response = await fetch(`https://neoretail.onrender.com/pos/admin/reports?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

@@ -149,7 +149,7 @@ const ManagerDash = () => {
   const handleSaleClick = async (sale) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://neoretail.onrender.com//pos/sales/report?store_id=${user.store_id}&date_from=2025-10-18&date_to=2025-10-18`, {
+      const response = await fetch(`https://neoretail.onrender.com/pos/sales/report?store_id=${user.store_id}&date_from=2025-10-18&date_to=2025-10-18`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -208,7 +208,7 @@ const ManagerDash = () => {
       const token = localStorage.getItem('token');
       
       // Fetch sales summary
-      const salesResponse = await fetch(`https://neoretail.onrender.com//pos/sales/report?store_id=${storeId}&date_from=2025-10-18&date_to=2025-10-18`, {
+      const salesResponse = await fetch(`https://neoretail.onrender.com/pos/sales/report?store_id=${storeId}&date_from=2025-10-18&date_to=2025-10-18`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -216,7 +216,7 @@ const ManagerDash = () => {
       });
       
       // Fetch store info
-      const storeResponse = await fetch(`https://neoretail.onrender.com//stores/${storeId}`, {
+      const storeResponse = await fetch(`https://neoretail.onrender.com/stores/${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -224,7 +224,7 @@ const ManagerDash = () => {
       });
       
       // Fetch low stock count
-      const lowStockResponse = await fetch(`https://neoretail.onrender.com//pos/low-stock/${storeId}`, {
+      const lowStockResponse = await fetch(`https://neoretail.onrender.com/pos/low-stock/${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -232,7 +232,7 @@ const ManagerDash = () => {
       });
       
       // Fetch staff count
-      const staffResponse = await fetch(`https://neoretail.onrender.com//users?store_id=${storeId}`, {
+      const staffResponse = await fetch(`https://neoretail.onrender.com/users?store_id=${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -240,7 +240,7 @@ const ManagerDash = () => {
       });
       
       // Fetch recent sales
-      const recentSalesResponse = await fetch(`https://neoretail.onrender.com//pos/sales?store_id=${storeId}&limit=5`, {
+      const recentSalesResponse = await fetch(`https://neoretail.onrender.com/pos/sales?store_id=${storeId}&limit=5`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

@@ -142,7 +142,7 @@ const ManagerInventory = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://neoretail.onrender.com//stock?store_id=${storeId}`, {
+      const response = await fetch(`https://neoretail.onrender.com/stock?store_id=${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -170,7 +170,7 @@ const ManagerInventory = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://neoretail.onrender.com//pos/low-stock/${storeId}`, {
+      const response = await fetch(`https://neoretail.onrender.com/pos/low-stock/${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -203,7 +203,7 @@ const ManagerInventory = () => {
   const fetchStoreInfo = async (storeId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://neoretail.onrender.com//stores/${storeId}`, {
+      const response = await fetch(`https://neoretail.onrender.com/stores/${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -228,7 +228,7 @@ const ManagerInventory = () => {
       const token = localStorage.getItem('token');
       const decodedToken = decodeToken(token);
       
-      const response = await fetch(`https://neoretail.onrender.com//users/me?user_id=${decodedToken.user_id}`, {
+      const response = await fetch(`https://neoretail.onrender.com/users/me?user_id=${decodedToken.user_id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
