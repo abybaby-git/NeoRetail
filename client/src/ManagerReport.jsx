@@ -133,7 +133,7 @@ const ManagerReport = () => {
   const fetchStoreInfo = async (storeId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/stores/${storeId}`, {
+      const response = await fetch(`https://neoretail.onrender.com//stores/${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -161,7 +161,7 @@ const ManagerReport = () => {
       const { startDate, endDate } = dateRange;
       
       const response = await fetch(
-        `http://localhost:5000/pos/sales/report?store_id=${storeId}&date_from=${startDate}&date_to=${endDate}`,
+        `https://neoretail.onrender.com//pos/sales/report?store_id=${storeId}&date_from=${startDate}&date_to=${endDate}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,

@@ -133,7 +133,7 @@ const ManagerSalePos = () => {
   const fetchStoreInfo = async (storeId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/stores/${storeId}`, {
+      const response = await fetch(`https://neoretail.onrender.com//stores/${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -157,8 +157,8 @@ const ManagerSalePos = () => {
     try {
       const token = localStorage.getItem('token');
       const url = search 
-        ? `http://localhost:5000/pos/products?store_id=${storeId}&search=${encodeURIComponent(search)}`
-        : `http://localhost:5000/pos/products?store_id=${storeId}`;
+        ? `https://neoretail.onrender.com//pos/products?store_id=${storeId}&search=${encodeURIComponent(search)}`
+        : `https://neoretail.onrender.com//pos/products?store_id=${storeId}`;
       
       const response = await fetch(url, {
         headers: {
@@ -186,7 +186,7 @@ const ManagerSalePos = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/pos/products/barcode/${barcode}?store_id=${user.store_id}`, {
+      const response = await fetch(`https://neoretail.onrender.com//pos/products/barcode/${barcode}?store_id=${user.store_id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -338,7 +338,7 @@ const ManagerSalePos = () => {
       };
       
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/pos/sales', {
+      const response = await fetch('https://neoretail.onrender.com//pos/sales', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

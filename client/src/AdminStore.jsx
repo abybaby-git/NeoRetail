@@ -119,7 +119,7 @@ const AdminStore = () => {
 
         // Load stores from backend with strict JSON checks
         try {
-          const response = await fetch('http://localhost:5000/stores', {
+          const response = await fetch('https://neoretail.onrender.com//stores', {
             headers: { Accept: 'application/json' }
           });
           if (!response.ok) {
@@ -142,7 +142,7 @@ const AdminStore = () => {
 
         // Load users to compute role coverage per store
         try {
-          const usersRes = await fetch('http://localhost:5000/users', {
+          const usersRes = await fetch('https://neoretail.onrender.com//users', {
             headers: { Accept: 'application/json' }
           });
           if (usersRes.ok) {
@@ -217,7 +217,7 @@ const AdminStore = () => {
   // Fetch statistics
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:5000/stores/stats', {
+      const response = await fetch('https://neoretail.onrender.com//stores/stats', {
         headers: { Accept: 'application/json' }
       });
       if (response.ok) {
@@ -232,7 +232,7 @@ const AdminStore = () => {
   // Fetch managers for edit modal
   const fetchManagers = async () => {
     try {
-      const response = await fetch('http://localhost:5000/stores/managers', {
+      const response = await fetch('https://neoretail.onrender.com//stores/managers', {
         headers: { Accept: 'application/json' }
       });
       if (response.ok) {
@@ -261,7 +261,7 @@ const AdminStore = () => {
     
     setIsUpdatingStore(true);
     try {
-      const response = await fetch(`http://localhost:5000/stores/${editingStore.id}`, {
+      const response = await fetch(`https://neoretail.onrender.com//stores/${editingStore.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -310,7 +310,7 @@ const AdminStore = () => {
     
     setIsDeletingStore(true);
     try {
-      const response = await fetch(`http://localhost:5000/stores/${deletingStore.id}`, {
+      const response = await fetch(`https://neoretail.onrender.com//stores/${deletingStore.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -766,7 +766,7 @@ const AdminStore = () => {
                 onClick={async () => {
                   setIsSavingStore(true);
                   try {
-                    const response = await fetch('http://localhost:5000/stores', {
+                    const response = await fetch('https://neoretail.onrender.com//stores', {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
@@ -786,7 +786,7 @@ const AdminStore = () => {
                     const result = await response.json();
                     
                     // Refresh stores list
-                    const storesResponse = await fetch('http://localhost:5000/stores', {
+                    const storesResponse = await fetch('https://neoretail.onrender.com//stores', {
                       headers: { Accept: 'application/json' }
                     });
                     

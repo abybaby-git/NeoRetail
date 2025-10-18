@@ -472,7 +472,7 @@ const AdminInventory = () => {
       setIsCategoriesLoading(true);
       setCategoriesError(null);
       try {
-        const res = await fetch('http://localhost:5000/categories');
+        const res = await fetch('https://neoretail.onrender.com//categories');
         if (!res.ok) throw new Error('Failed to fetch categories');
         const data = await res.json();
         const rows = Array.isArray(data?.categories) ? data.categories : [];
@@ -497,7 +497,7 @@ const AdminInventory = () => {
       setIsProductsLoading(true);
       setProductsError(null);
       try {
-        const res = await fetch('http://localhost:5000/products');
+        const res = await fetch('https://neoretail.onrender.com//products');
         if (!res.ok) throw new Error('Failed to fetch products');
         const data = await res.json();
         const rows = Array.isArray(data?.products) ? data.products : [];
@@ -518,7 +518,7 @@ const AdminInventory = () => {
       setIsSellersLoading(true);
       setSellersError(null);
       try {
-        const res = await fetch('http://localhost:5000/sellers');
+        const res = await fetch('https://neoretail.onrender.com//sellers');
         if (!res.ok) throw new Error('Failed to fetch sellers');
         const data = await res.json();
         setSellers(data.sellers || []);
@@ -538,8 +538,8 @@ const AdminInventory = () => {
       setIsPurchasesLoading(true);
       setPurchasesError(null);
       try {
-        console.log('Fetching purchases from: http://localhost:5000/purchases');
-        const res = await fetch('http://localhost:5000/purchases');
+        console.log('Fetching purchases from: https://neoretail.onrender.com//purchases');
+        const res = await fetch('https://neoretail.onrender.com//purchases');
         console.log('Response status:', res.status);
         if (!res.ok) {
           const errorText = await res.text();
@@ -577,7 +577,7 @@ const AdminInventory = () => {
       setIsStockLoading(true);
       setStockError(null);
       try {
-        const res = await fetch('http://localhost:5000/stock', {
+        const res = await fetch('https://neoretail.onrender.com//stock', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -609,7 +609,7 @@ const AdminInventory = () => {
       setIsStoreStatsLoading(true);
       setStoreStatsError(null);
       try {
-        const res = await fetch('http://localhost:5000/stock/stats', {
+        const res = await fetch('https://neoretail.onrender.com//stock/stats', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -639,7 +639,7 @@ const AdminInventory = () => {
     setIsAvailablePurchasesLoading(true);
     setAvailablePurchasesError(null);
     try {
-      const res = await fetch('http://localhost:5000/stock/available-purchases', {
+      const res = await fetch('https://neoretail.onrender.com//stock/available-purchases', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -667,7 +667,7 @@ const AdminInventory = () => {
     setIsStoresLoading(true);
     setStoresError(null);
     try {
-      const res = await fetch('http://localhost:5000/stores', {
+      const res = await fetch('https://neoretail.onrender.com//stores', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -707,7 +707,7 @@ const AdminInventory = () => {
       setIsStoreStockLoading(true);
       setStoreStockError(null);
       
-      const res = await fetch(`http://localhost:5000/stock?store_id=${store.store_id}`, {
+      const res = await fetch(`https://neoretail.onrender.com//stock?store_id=${store.store_id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -805,7 +805,7 @@ const AdminInventory = () => {
     try {
       const token = localStorage.getItem('token');
       // Get total purchased quantity for this product
-      const purchaseResponse = await fetch(`http://localhost:5000/purchases?product_id=${stockItem.product_id}`, {
+      const purchaseResponse = await fetch(`https://neoretail.onrender.com//purchases?product_id=${stockItem.product_id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -817,7 +817,7 @@ const AdminInventory = () => {
         const totalPurchased = purchaseData.purchases?.reduce((sum, purchase) => sum + parseFloat(purchase.quantity), 0) || 0;
 
         // Get total allocated quantity for this product
-        const stockResponse = await fetch(`http://localhost:5000/stock?product_id=${stockItem.product_id}`, {
+        const stockResponse = await fetch(`https://neoretail.onrender.com//stock?product_id=${stockItem.product_id}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -918,7 +918,7 @@ const AdminInventory = () => {
         expiry_date: editStockData.expiry_date
       };
 
-      const response = await fetch(`http://localhost:5000/stock/${selectedStockItem.id}`, {
+      const response = await fetch(`https://neoretail.onrender.com//stock/${selectedStockItem.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1075,7 +1075,7 @@ const AdminInventory = () => {
 
       // Submit all assignments
       const promises = assignments.map(assignment => 
-        fetch('http://localhost:5000/stock/assign', {
+        fetch('https://neoretail.onrender.com//stock/assign', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1188,11 +1188,11 @@ const AdminInventory = () => {
     const cat = categoriesData.find(c => c.id === categoryId);
     const catName = cat?.name || 'this category';
     try {
-      const res = await fetch(`http://localhost:5000/categories/${categoryId}`, { method: 'DELETE' });
+      const res = await fetch(`https://neoretail.onrender.com//categories/${categoryId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete category');
       if (selectedCategory === catName) setSelectedCategory('all');
       // refresh categories
-      const res2 = await fetch('http://localhost:5000/categories');
+      const res2 = await fetch('https://neoretail.onrender.com//categories');
       if (res2.ok) {
         const data = await res2.json();
         const rows = Array.isArray(data?.categories) ? data.categories : [];
@@ -1251,7 +1251,7 @@ const AdminInventory = () => {
         unit: editFormData.unit || null,
       };
 
-      const res = await fetch(`http://localhost:5000/products/${editModal.product.id}`, {
+      const res = await fetch(`https://neoretail.onrender.com//products/${editModal.product.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1260,7 +1260,7 @@ const AdminInventory = () => {
       if (!res.ok) throw new Error('Failed to update product');
       
       // Refresh products data
-      const res2 = await fetch('http://localhost:5000/products');
+      const res2 = await fetch('https://neoretail.onrender.com//products');
       if (res2.ok) {
         const data = await res2.json();
         setProductsData(data.products || []);
@@ -1301,7 +1301,7 @@ const AdminInventory = () => {
         unit: addProductData.unit.trim() || null,
       };
 
-      const res = await fetch('http://localhost:5000/products', {
+      const res = await fetch('https://neoretail.onrender.com//products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1313,7 +1313,7 @@ const AdminInventory = () => {
       }
       
       // Refresh products data
-      const res2 = await fetch('http://localhost:5000/products');
+      const res2 = await fetch('https://neoretail.onrender.com//products');
       if (res2.ok) {
         const data = await res2.json();
         setProductsData(data.products || []);
@@ -1384,7 +1384,7 @@ const AdminInventory = () => {
       // Add products one by one
       for (const product of bulkData.products) {
         try {
-          const res = await fetch('http://localhost:5000/products', {
+          const res = await fetch('https://neoretail.onrender.com//products', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(product)
@@ -1401,7 +1401,7 @@ const AdminInventory = () => {
       }
       
       // Refresh products data
-      const res2 = await fetch('http://localhost:5000/products');
+      const res2 = await fetch('https://neoretail.onrender.com//products');
       if (res2.ok) {
         const data = await res2.json();
         setProductsData(data.products || []);
@@ -1487,7 +1487,7 @@ const AdminInventory = () => {
 
   const refreshCategories = async () => {
     try {
-      const res = await fetch('http://localhost:5000/categories');
+      const res = await fetch('https://neoretail.onrender.com//categories');
       if (!res.ok) throw new Error('Failed to fetch categories');
       const data = await res.json();
       const rows = Array.isArray(data?.categories) ? data.categories : [];
@@ -1509,7 +1509,7 @@ const AdminInventory = () => {
     setIsSavingCategory(true);
     setSaveCategoryError(null);
     try {
-      const res = await fetch('http://localhost:5000/categories', {
+      const res = await fetch('https://neoretail.onrender.com//categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description })
@@ -1593,7 +1593,7 @@ const AdminInventory = () => {
         payment_terms: addSupplierData.paymentTerms.trim() || null,
       };
 
-      const res = await fetch('http://localhost:5000/sellers', {
+      const res = await fetch('https://neoretail.onrender.com//sellers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1605,7 +1605,7 @@ const AdminInventory = () => {
       }
       
       // Refresh sellers data
-      const res2 = await fetch('http://localhost:5000/sellers');
+      const res2 = await fetch('https://neoretail.onrender.com//sellers');
       if (res2.ok) {
         const data = await res2.json();
         setSellers(data.sellers || []);
@@ -1687,7 +1687,7 @@ const AdminInventory = () => {
         payment_terms: editSupplierData.paymentTerms.trim() || null,
       };
 
-      const res = await fetch(`http://localhost:5000/sellers/${selectedSupplier.id}`, {
+      const res = await fetch(`https://neoretail.onrender.com//sellers/${selectedSupplier.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1699,7 +1699,7 @@ const AdminInventory = () => {
       }
       
       // Refresh sellers data
-      const res2 = await fetch('http://localhost:5000/sellers');
+      const res2 = await fetch('https://neoretail.onrender.com//sellers');
       if (res2.ok) {
         const data = await res2.json();
         setSellers(data.sellers || []);
@@ -1715,7 +1715,7 @@ const AdminInventory = () => {
 
   const handleDeleteSupplier = async (supplierId) => {
     try {
-      const res = await fetch(`http://localhost:5000/sellers/${supplierId}`, {
+      const res = await fetch(`https://neoretail.onrender.com//sellers/${supplierId}`, {
         method: 'DELETE'
       });
       
@@ -1725,7 +1725,7 @@ const AdminInventory = () => {
       }
       
       // Refresh sellers data
-      const res2 = await fetch('http://localhost:5000/sellers');
+      const res2 = await fetch('https://neoretail.onrender.com//sellers');
       if (res2.ok) {
         const data = await res2.json();
         setSellers(data.sellers || []);
@@ -1828,7 +1828,7 @@ const AdminInventory = () => {
     e.preventDefault();
     
     try {
-      const response = await fetch('http://localhost:5000/purchases', {
+      const response = await fetch('https://neoretail.onrender.com//purchases', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

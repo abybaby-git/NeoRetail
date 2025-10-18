@@ -121,7 +121,7 @@ const ManagerStaffManage = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/users?store_id=${storeId}`, {
+      const response = await fetch(`https://neoretail.onrender.com//users?store_id=${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -147,7 +147,7 @@ const ManagerStaffManage = () => {
   const fetchStoreInfo = async (storeId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/stores/${storeId}`, {
+      const response = await fetch(`https://neoretail.onrender.com//stores/${storeId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

@@ -138,7 +138,7 @@ const AdminStaff = () => {
   // Quick assign handling
   const reassignUserStore = async (userId, targetStoreId) => {
     try {
-      const res = await fetch(`http://localhost:5000/users/${userId}`, {
+      const res = await fetch(`https://neoretail.onrender.com//users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ store_id: targetStoreId === '' ? null : Number(targetStoreId) })
@@ -209,7 +209,7 @@ const AdminStaff = () => {
       if (filterRole !== 'all') params.append('role', filterRole);
       if (filterStatus !== 'all') params.append('status', filterStatus);
       if (searchTerm) params.append('q', searchTerm);
-      const res = await fetch(`http://localhost:5000/users?${params.toString()}`, { headers: { Accept: 'application/json' } });
+      const res = await fetch(`https://neoretail.onrender.com//users?${params.toString()}`, { headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error('Failed to fetch users');
       const data = await res.json();
       setStaff(Array.isArray(data.users) ? data.users : []);
@@ -229,7 +229,7 @@ const AdminStaff = () => {
   // Fetch stores for mapping and dropdowns
   const fetchStores = async () => {
     try {
-      const res = await fetch('http://localhost:5000/stores', { headers: { Accept: 'application/json' } });
+      const res = await fetch('https://neoretail.onrender.com//stores', { headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error('Failed to fetch stores');
       const data = await res.json();
       setStores(Array.isArray(data.stores) ? data.stores : []);
@@ -299,7 +299,7 @@ const AdminStaff = () => {
   const addStaff = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch('http://localhost:5000/users', {
+      const res = await fetch('https://neoretail.onrender.com//users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName.trim(), email: newEmail.trim(), role: newRole, store_id: newStore ? Number(newStore) : null, status: newStatus })
@@ -320,7 +320,7 @@ const AdminStaff = () => {
     if (!editingStaff) return;
     setIsUpdating(true);
     try {
-      const res = await fetch(`http://localhost:5000/users/${editingStaff.id}`, {
+      const res = await fetch(`https://neoretail.onrender.com//users/${editingStaff.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editName.trim(), email: editEmail.trim(), role: editRole, store_id: editStore ? Number(editStore) : null, status: editStatus })
@@ -341,7 +341,7 @@ const AdminStaff = () => {
     if (!deletingStaff) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`http://localhost:5000/users/${deletingStaff.id}`, { method: 'DELETE' });
+      const res = await fetch(`https://neoretail.onrender.com//users/${deletingStaff.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete user');
       await fetchUsers();
       setShowDeleteConfirm(false);
