@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('./db');
+const bcrypt = require('bcrypt');
 
 // GET /users/me -> get current user info (for debugging)
 router.get('/me', async (req, res) => {
@@ -61,6 +62,7 @@ router.get('/', async (req, res) => {
 
 // POST /users -> create new user
 router.post('/', async (req, res) => {
+  const client = await pool.connect();
   try {
     const { name, email, role, store_id, rfid_uid, status } = req.body;
 
@@ -68,17 +70,58 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'name, email and role are required' });
     }
 
-    const insert = await pool.query(
+    await client.query('BEGIN');
+
+    // Create user record
+    const insert = await client.query(
       `INSERT INTO users (name, email, role, store_id, rfid_uid, status)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, name, email, role, store_id, rfid_uid, status, created_at`,
       [name.trim(), email.trim(), role.toLowerCase(), store_id || null, rfid_uid || null, status || 'active']
     );
 
-    res.status(201).json({ message: 'User created', user: insert.rows[0] });
+    const newUser = insert.rows[0];
+    const userId = newUser.id;
+
+    // Generate credentials: username = email, password = role@123
+    const username = email.trim();
+    const password = `${role.toLowerCase()}@123`;
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create credentials record
+    await client.query(
+      `INSERT INTO user_credentials (user_id, username, password_hash, login_attempts, last_login)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, passwordHash, 0, null]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({ 
+      message: 'User created successfully', 
+      user: newUser,
+      credentials: {
+        username: username,
+        password: password,
+        note: 'Please save these credentials securely'
+      }
+    });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Failed to create user:', err);
+    
+    // Handle specific error cases
+    if (err.code === '23505') { // Unique constraint violation
+      if (err.constraint === 'users_email_key') {
+        return res.status(400).json({ message: 'Email already exists' });
+      } else if (err.constraint === 'user_credentials_username_key') {
+        return res.status(400).json({ message: 'Username (email) already exists' });
+      }
+    }
+    
     res.status(500).json({ message: 'Failed to create user' });
+  } finally {
+    client.release();
   }
 });
 
