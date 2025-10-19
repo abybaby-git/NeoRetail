@@ -90,9 +90,9 @@ router.post('/', async (req, res) => {
 
     // Create credentials record
     await client.query(
-      `INSERT INTO user_credentials (user_id, username, password_hash, login_attempts, last_login)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [userId, username, passwordHash, 0, null]
+      `INSERT INTO user_credentials (user_id, username, password_hash)
+       VALUES ($1, $2, $3)`,
+      [userId, username, passwordHash]
     );
 
     await client.query('COMMIT');
