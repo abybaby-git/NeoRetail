@@ -411,6 +411,84 @@ const ManagerSalePos = () => {
     setShowSuccessModal(false);
   };
 
+  // Format date as DD-MM-YYYY HH:mm
+  const formatDateForReceipt = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      const dd = String(date.getDate()).padStart(2, '0');
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const yyyy = date.getFullYear();
+      const hh = String(date.getHours()).padStart(2, '0');
+      const min = String(date.getMinutes()).padStart(2, '0');
+      return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  // Open print dialog with receipt content
+  const handlePrintReceipt = () => {
+    if (!lastSale) return;
+
+    const receiptWindow = window.open('', '_blank', 'width=380,height=600');
+    if (!receiptWindow) return;
+
+    const storeName = storeInfo?.name || 'NeoRetail Store';
+    const storeLocation = storeInfo?.location || '';
+    const saleId = lastSale.id || lastSale.sale_id || '';
+    const saleDate = lastSale.sale_date ? formatDateForReceipt(lastSale.sale_date) : formatDateForReceipt(new Date().toISOString());
+    const total = typeof lastSale.grand_total === 'number' ? lastSale.grand_total.toFixed(2) : lastSale.grand_total || '';
+    const payment = lastSale.payment_method || (Array.isArray(lastSale.payments) && lastSale.payments[0]?.payment_method) || 'N/A';
+
+    const styles = `
+      <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 12px; }
+        .header { text-align: center; margin-bottom: 10px; }
+        .title { font-weight: 700; font-size: 16px; }
+        .sub { color: #555; font-size: 12px; }
+        .row { display: flex; justify-content: space-between; font-size: 12px; margin: 6px 0; }
+        .total { font-weight: 700; font-size: 14px; border-top: 1px dashed #999; padding-top: 8px; margin-top: 8px; }
+        .footer { text-align: center; margin-top: 14px; font-size: 12px; color: #555; }
+        hr { border: none; border-top: 1px dashed #999; margin: 8px 0; }
+        @page { size: auto; margin: 8mm; }
+      </style>
+    `;
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Receipt #${saleId}</title>
+          ${styles}
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">${storeName}</div>
+            ${storeLocation ? `<div class="sub">${storeLocation}</div>` : ''}
+            <div class="sub">Receipt</div>
+          </div>
+          <div class="row"><span>Sale ID</span><span>#${saleId}</span></div>
+          <div class="row"><span>Date</span><span>${saleDate}</span></div>
+          <div class="row"><span>Payment</span><span>${payment}</span></div>
+          <hr />
+          <div class="row total"><span>Total</span><span>₹${total}</span></div>
+          <div class="footer">Thank you for shopping with us!</div>
+        </body>
+      </html>
+    `;
+
+    receiptWindow.document.open();
+    receiptWindow.document.write(html);
+    receiptWindow.document.close();
+    receiptWindow.focus();
+    // Give the new window a moment to render before printing
+    setTimeout(() => {
+      receiptWindow.print();
+      receiptWindow.close();
+    }, 300);
+  };
+
   const handleLogout = () => {
     setShowLogoutConfirm(true);
   };
@@ -1173,10 +1251,22 @@ const ManagerSalePos = () => {
               
               <div className="flex gap-3">
                 <button
-                  onClick={closeSuccessModal}
+                  onClick={handlePrintReceipt}
                   className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
-                  Continue Shopping
+                  Print Receipt
+                </button>
+                <button
+                  onClick={closeSuccessModal}
+                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Go green (no print)
+                </button>
+                <button
+                  onClick={closeSuccessModal}
+                  className="flex-1 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+                >
+                  Back to POS
                 </button>
               </div>
             </div>
